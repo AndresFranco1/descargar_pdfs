@@ -29,8 +29,11 @@ class Ventana_inicio_sesion:
         ttk.Entry(self.root, textvariable=self.contraseña, width=30, show="*").pack(pady=5)
         #iniciar sesión 
         ttk.Button(self.root, text="Iniciar Sesión", command=self.iniciar_sesion).pack(pady=20)#botón que ejecuta la funcion iniciar_sesión
+        return self.cuil
 
-
+    def obtener_cuil(self):
+        """Devuelve el CUIL ingresado, se utiliza en "ventanaPrincipal"""
+        return self.cuil.get()
        
     def iniciar_sesion(self):
         """Realiza el inicio de sesión con múltiples pasos en el sistema AFIP."""
@@ -71,79 +74,113 @@ class Ventana_inicio_sesion:
             return None
 
     def abrir_ventana_seleccion(self,driver):
-        ventana_seleccion = VentanaSeleccion(self.root, driver)
+        ventana_seleccion = VentanaSeleccion(self.root, driver, self.obtener_cuil())
         # ventana_seleccion.title = ("Ventana principal")
         # ventana_seleccion.geometry("600x400")
         # ttk.Label(ventana_seleccion, text="Bienvenido al Sistema AFIP", font=("Arial", 16)).pack(pady=50)
 
 class VentanaSeleccion():
-    def __init__(self,root,driver):
+    def __init__(self,root,driver,cuil):
         self.root = tk.Toplevel(root)#ventana principal
         self.driver = driver #pagina
         self.root.title("Bienvenido al Sistema AFIP", font=("Arial", 16)).pack(pady=50)
         self.root.geometry("600x400")
+        #serivicios
+        self.servicio = tk.StringVar()
+        self.lista_servicios = []
+        self.servicio_seleccionado = None#inicializa vacío pq aún no hay anda seleccionado
+        #empresas
+        self.empresa = tk.StringVar()
+        
+        self.cuil=cuil
         self.crear_interfaz()
     
     def crear_interfaz(self):
-        #aca poner para recibir parametros y dsp las funciones a partir de eso que se recibe
-#SERVICIOS
-def obtener_servicios(usuario_id):
-    """Consulta la base de datos para obtener los servicios del usuario."""
-    conexion = sqlite3.connect('mi_base_de_datos.db')  # Conéctate a tu base de datos
-    cursor = conexion.cursor()
 
-    # Consulta las opciones para el usuario específico
-    consulta_a_db = "SELECT servicio FROM servicios WHERE usuario_id = ?"
-    cursor.execute(consulta_a_db, (usuario_id,))
-    servicios = [fila[0] for fila in cursor.fetchall()]  # Convierte el resultado a una lista
+        #SERVICIOS 
+    
+        def filtrar_servicios(event,servicios_x_cuil):
+            texto_servicio = entrada_servicio.get().lower()
+            lista_servicios.delete(0, tk.END)
+            for servicio in servicios_x_cuil:  # Usar la lista ya obtenida de la función obtener_servicios . Solo filtra entre los servicios que ese cuil tiene
+                if texto_servicio in servicio.lower():
+                    lista_servicios.insert(tk.END, servicio)
+            
+        
+        def obtener_servicios(cuil):
+            """Consulta la base de datos para obtener los servicios del usuario."""
+            conexion = sqlite3.connect('mi_base_de_datos.db')  # Conéctate a tu base de datos
+            cursor = conexion.cursor()
 
-    conexion.close()
-    return servicios
+            # Consulta las opciones para el usuario específico
+            consulta_a_db = "SELECT servicio FROM servicios WHERE usuario_id = ?"#reveer esto
+            cursor.execute(consulta_a_db, (cuil,))
+            servicios = [fila[0] for fila in cursor.fetchall()]  # Convierte el resultado a una lista
 
-def seleccionar_servicio(servicios,opciones):
-    """Crea una interfaz gráfica para seleccionar un servicio."""
-    def filtrar(event):
-        """Filtra la lista en base al texto ingresado."""
-        texto = entrada.get().lower()
-        lista.delete(0, tk.END)
-        for servicio in servicios:
-            if texto in servicio.lower():
-                lista.insert(tk.END, servicio)
+            conexion.close()#cierra la conexión con la base 
+            return servicios
 
-    def seleccionar(event):
-        """Obtiene el servicio seleccionado."""
-        seleccion = lista.get(lista.curselection())
-        print(f"Servicio seleccionado: {seleccion}")
-        opciones.append(seleccion)
-        ventana.destroy()  # Cierra la ventana
-        return seleccion
+        def registrar_seleccion_servicio(event):
+            servicio_seleccionado = lista_servicios.get(lista_servicios.curselection())
+            print(f"Servicio seleccionado: {servicio_seleccionado}")
+            self.servicio_seleccionado = servicio_seleccionado#se asigna el valor de la selección al atributo servicio_selccionado para poder implementarlo luego
 
-    # Crear ventana
-    ventana = tk.Toplevel()
-    ventana.title("Seleccionar Servicio")
 
-    # Campo de entrada
-    entrada = ttk.Entry(ventana, width=40)
-    entrada.pack(pady=5)
-    entrada.bind("<KeyRelease>", filtrar)  # Filtrar mientras escribe
+        ttk.Label(self.root, text="Seleccionar servicio y empresa", font= ("Arial",16)).pack(pady=10)#ver que parametros solicita ttk.Label
+        #servicio
+        servicios_x_cuil= self.obtener_servicios(self.cuil)
+        ttk.Label(self.root, text="Servicio:").pack(pady=5)
+        entrada_servicio = ttk.Entry(self.root, width=30)
+        entrada_servicio.pack(pady=5) 
+        entrada_servicio.bind("<KeyRelease>", lambda event: filtrar_servicios(servicios_x_cuil))
+        """
+        Bind --> sirve para relación una función cuando ocurra cierto evento, en este caso relaciona filtrar_Servicios con keyrelease (cuando se deja de presionar una tecla)
+        lambda event --> sirve para que la fx no se ejecute directamente, sino que solo cuando ocurra el evento, si no existe lambda la fx se ejecuta automáticamente sin esperar a que ocurra el evento. Lambda viene a ser una fx anonima que toma como parametros event:... 
+        """
+        lista_servicios = tk.Listbox(self.root, width=30, height=5)# listbox es un elemento de tkinter, es una lista con la q los usuarios pueden interactuar. Self.root indica la ventana principal
+        lista_servicios.pack(pady=5)#pack es para posicionar el contendor dentro de la ventana, pady es como el padding
+        lista_servicios.bind("<<ListboxSelect>>", registrar_seleccion_servicio)
+        
+        
+        #empresa (en función del servicio elegido)
+        
+        
+        def obtener_empresas(usuario_id,servicio_seleccionado):
+            """Consulta la base de datos para obtener las empresas asociadas al usuario."""
+            conexion = sqlite3.connect('mi_base_de_datos.db')  # Conexión a la base de datos
+            cursor = conexion.cursor()
 
-    # Lista desplegable
-    lista = tk.Listbox(ventana, width=40, height=10)
-    lista.pack(pady=5)
+            
+            consulta_a_db = """
+            SELECT nombre_empresa 
+            FROM empresas 
+            WHERE usuario_id = ? , servicio_selecionado = ?
+            """# Consulta las empresas asociadas al usuario
+            cursor.execute(consulta_a_db, (usuario_id,servicio_seleccionado))
+            empresas = [fila[0] for fila in cursor.fetchall()]
+            """
+            cursor.fetchall --> recupera todos los resultados de la consulta y hace una lista de tuplas, cada tupla tendrá solo nombre_empresa
+            fila[0] --> como cada valor de la lista es una tupla, con fila[0] indicamos que accedemos al valor 0 (y único) de la tupla
+            empresas --> será igual a una lista que albergará en sus posiciones el nombre de cada empresa
+            """
 
-    # Llenar la lista con todos los servicios al inicio
-    for servicio in servicios:
-        lista.insert(tk.END, servicio)
-
-    lista.bind("<<ListboxSelect>>", seleccionar)  # Seleccionar un servicio
-
-    ventana.mainloop()
+            conexion.close()
+            return empresas
+        
+        
+        
+        ttk.Label(self.root, text="Empresa:").pack(pady=5)
+        ttk.Entry(self.root,  width=30, show="*").pack(pady=5)#esto no tiene que ser textvariable pq van a seleccioanr de una lista desplegable de la cual van a poder ir escribiendo
+        
+        
+        #me faltan dos selecciones mas para llegar a la parte de poner fecha_inicio y fecha_fin
+        
 
 
 #EMPRESAS
 def obtener_empresas(usuario_id):
     """Consulta la base de datos para obtener las empresas asociadas al usuario."""
-    import sqlite3 #ver
+
 
     conexion = sqlite3.connect('mi_base_de_datos.db')  # Conexión a la base de datos
     cursor = conexion.cursor()
